@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arkimod Control</title>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <script src="crypto.js"></script>
+    <style>
+        :root {
+            --primary:      #0a84ff;
+            --bg-main:      #0a0a0a;
+            --bg-card:      #1c1c1e;
+            --border:       #2c2c2e;
+            --text-muted:   #8e8e93;
+            --success:      #32d74b;
+            --danger:       #ff3b30;
+            --navbar-h:     56px;
+            --lockbar-h:    56px;
+            --tabbar-h:     64px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-main);
+            color: #fff;
+            -webkit-tap-highlight-color: transparent;
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── NAVBAR ─────────────────────────────────────────── */
+        .navbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: var(--navbar-h);
+            background: var(--bg-main);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .navbar-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #fff;
+        }
+        .navbar-status {
+            position: absolute;
+            right: 16px;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--border);
+            transition: background 0.3s;
+        }
+        .navbar-status.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+        /* Botón de icono en la esquina izquierda del navbar */
+        .navbar-icon-btn {
+            position: absolute;
+            left: 12px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s, background 0.2s;
+        }
+        .navbar-icon-btn:active {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* ── SCROLLABLE CONTENT ─────────────────────────────── */
+        main {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-top: calc(var(--navbar-h) + 16px);
+            padding-bottom: calc(var(--lockbar-h) + var(--tabbar-h) + 16px);
+            padding-left: 16px;
+            padding-right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* ── CARDS ──────────────────────────────────────────── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+        }
+        .card-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+        }
+
+        /* ── SLIDER DE ACCIONAMIENTO ─────────────────────────── */
+        .door-slider {
+            width: 100%;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .door-slider-track {
+            position: relative;
+            height: 68px;
+            background: #141416;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            overflow: hidden;
+        }
+        /* Relleno de color que crece a medida que se arrastra */
+        .door-slider-fill {
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 0%;
+            background: linear-gradient(90deg, rgba(255,59,48,0.15), rgba(255,59,48,0.45));
+            transition: background 0.2s;
+        }
+        /* Cuando el slider está en zona activa, el relleno se vuelve más intenso */
+        .door-slider.activated .door-slider-fill {
+            background: linear-gradient(90deg, rgba(255,59,48,0.3), #ff3b30);
+        }
+        /* Thumb: el elemento que el usuario arrastra */
+        .door-slider-thumb {
+            position: absolute;
+            left: 5px; top: 5px; bottom: 5px;
+            width: 58px;
+            background: linear-gradient(135deg, #c62828, var(--danger));
+            border-radius: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 3px 14px rgba(255,59,48,0.45);
+            touch-action: none;
+            cursor: grab;
+            transition: box-shadow 0.2s;
+        }
+        /* Estado bloqueado (sin clave introducida) */
+        .door-slider.locked .door-slider-fill { display: none; }
+        .door-slider.locked .door-slider-thumb {
+            background: #2a2a2a;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        /* Pista de texto dentro del track */
+        .door-slider-hint {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-left: 72px; /* Espacio para el thumb */
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            pointer-events: none;
+            transition: color 0.2s;
+        }
+        .door-slider.activated .door-slider-hint { color: #fff; }
+
+        /* Status badge */
+        #status {
+            text-align: center;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        /* Latency mini-panel dentro de la card */
+        .feedback-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+        }
+        .feedback-row .lbl { color: var(--text-muted); }
+        .feedback-row .val { font-family: monospace; font-size: 12px; font-weight: 700; }
+        .val-blue  { color: var(--primary); }
+        .val-green { color: var(--success); }
+        .divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+        /* ── SLIDERS ────────────────────────────────────────── */
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .slider-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .slider-value {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--primary);
+            min-width: 40px;
+            text-align: right;
+            font-family: monospace;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border);
+            outline: none;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 2px 8px rgba(10, 132, 255, 0.5);
+            cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: none;
+            cursor: pointer;
+        }
+
+        /* ── CHECKBOXES ─────────────────────────────────────── */
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .checkbox-item:has(input:checked) { border-color: var(--primary); }
+        .checkbox-item input[type="checkbox"] {
+            -webkit-appearance: none;
+            width: 20px; height: 20px;
+            border-radius: 6px;
+            border: 2px solid var(--border);
+            background: transparent;
+            flex-shrink: 0;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .checkbox-item input[type="checkbox"]:checked {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+        .checkbox-item input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 5px;
+            width: 6px; height: 10px;
+            border: 2px solid #fff;
+            border-top: none; border-left: none;
+            transform: rotate(45deg);
+        }
+        .checkbox-label {
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.2;
+            color: rgba(255,255,255,0.85);
+        }
+
+        /* ── UPDATE BUTTON ──────────────────────────────────── */
+        #btnUpdate {
+            align-self: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            background: none;
+            border: 1px solid var(--border);
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-family: monospace;
+            letter-spacing: 0.06em;
+        }
+
+        /* ── SECURITY LOCK BAR ──────────────────────────────── */
+        .security-lock {
+            position: fixed;
+            bottom: var(--tabbar-h); left: 0; right: 0;
+            height: var(--lockbar-h);
+            background: var(--bg-main);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            z-index: 40;
+        }
+        .security-lock .lock-icon { color: var(--text-muted); flex-shrink: 0; transition: color 0.2s; }
+        .security-lock.valid .lock-icon { color: var(--success); }
+        .security-lock input {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: #fff;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+            font-family: monospace;
+        }
+        .security-lock input:focus { border-color: var(--primary); }
+
+        /* ── TAB BAR ────────────────────────────────────────── */
+        nav {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: var(--tabbar-h);
+            background: var(--bg-main);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 50;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .nav-btn {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            background: none; border: none;
+            color: rgba(255,255,255,0.35);
+            cursor: default;
+        }
+        .nav-btn svg { width: 22px; height: 22px; margin-bottom: 3px; }
+        .nav-text { font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+        .nav-btn-active { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar superior -->
+    <header class="navbar">
+        <!-- Icono de mantenimiento (esquina superior izquierda) -->
+        <button class="navbar-icon-btn" id="btnMaintenance" title="Mantenimiento">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <!-- Cuerpo de la llave inglesa -->
+                <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77
+                         a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91
+                         a6 6 0 017.94-7.94l-3.76 3.76z"/>
+            </svg>
+        </button>
+        <span class="navbar-title">Arkimod Control ACTUALIZADO</span>
+        <div class="navbar-status" id="navStatus"></div>
+    </header>
+
+    <main>
+
+        <!-- ── CONTROL DE PUERTA ── -->
+        <div class="card">
+            <div class="card-label">Control de Puerta</div>
+
+            <!-- Slider de activación con retorno por muelle -->
+            <div class="door-slider locked" id="doorSlider">
+                <div class="door-slider-track" id="doorTrack">
+                    <div class="door-slider-fill" id="doorFill"></div>
+                    <!-- Thumb que el usuario arrastra hacia la derecha -->
+                    <div class="door-slider-thumb" id="doorThumb">
+                        <!-- Icono de flecha derecha para indicar dirección de arrastre -->
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                    <!-- Texto de ayuda superpuesto en el track -->
+                    <span class="door-slider-hint" id="doorHint">Desliza para mover</span>
+                </div>
+            </div>
+
+            <div style="height:12px"></div>
+            <div id="status">Esperando...</div>
+        </div>
+
+        <!-- ── LATENCIA / DIAGNÓSTICO UART ── -->
+        <div class="card">
+            <div class="card-label">Diagnóstico de Señal</div>
+            <div class="feedback-row">
+                <span class="lbl">Último enviado (TX →)</span>
+                <span id="lastSentResult" class="val val-blue">---</span>
+            </div>
+            <div class="divider"></div>
+            <div class="feedback-row">
+                <span class="lbl">Respuesta hardware (← RX)</span>
+                <span id="feedbackResult" class="val val-green">---</span>
+            </div>
+        </div>
+
+        <!-- ── PARÁMETROS ── -->
+        <div class="card">
+            <div class="card-label">Parámetros de Movimiento</div>
+            <div style="display:flex; flex-direction:column; gap:20px;">
+
+                <!-- Slider: Paso Peatonal (0-40%) -->
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span class="slider-name">Paso Peatonal</span>
+                        <span class="slider-value" id="valPeatonal">0%</span>
+                    </div>
+                    <input type="range" id="sliderPeatonal" min="0" max="40" value="0"
+                        oninput="document.getElementById('valPeatonal').innerText = this.value + '%'">
+                </div>
+
+                <!-- Slider: Paro Suave (0-40%) -->
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span class="slider-name">Paro Suave</span>
+                        <span class="slider-value" id="valParoSuave">0%</span>
+                    </div>
+                    <input type="range" id="sliderParoSuave" min="0" max="40" value="0"
+                        oninput="document.getElementById('valParoSuave').innerText = this.value + '%'">
+                </div>
+
+                <!-- Slider: Velocidad (0-100%) -->
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span class="slider-name">Velocidad</span>
+                        <span class="slider-value" id="valVelocidad">0%</span>
+                    </div>
+                    <input type="range" id="sliderVelocidad" min="0" max="100" value="0"
+                        oninput="document.getElementById('valVelocidad').innerText = this.value + '%'">
+                </div>
+            </div>
+        </div>
+
+        <!-- ── SEGURIDAD ── -->
+        <div class="card">
+            <div class="card-label">Dispositivos de Seguridad</div>
+            <div class="checkbox-grid">
+                <label class="checkbox-item">
+                    <input type="checkbox" id="chkFotoApertura">
+                    <span class="checkbox-label">Fotocélula Apertura</span>
+                </label>
+                <label class="checkbox-item">
+                    <input type="checkbox" id="chkBandaApertura">
+                    <span class="checkbox-label">Banda Apertura</span>
+                </label>
+                <label class="checkbox-item">
+                    <input type="checkbox" id="chkFotoCierre">
+                    <span class="checkbox-label">Fotocélula Cierre</span>
+                </label>
+                <label class="checkbox-item">
+                    <input type="checkbox" id="chkBandaCierre">
+                    <span class="checkbox-label">Banda Cierre</span>
+                </label>
+            </div>
+        </div>
+
+
+    </main>
+
+    <!-- Barra de seguridad sobre la nav -->
+    <div class="security-lock" id="lockPanel">
+        <svg class="lock-icon" id="lockIcon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        <input type="password" id="passInput" placeholder="Clave de seguridad" maxlength="16">
+    </div>
+
+    <!-- Tab Bar -->
+    <nav>
+        <button class="nav-btn nav-btn-active">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6"/>
+            </svg>
+            <span class="nav-text">Control</span>
+        </button>
+        <button class="nav-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+            </svg>
+            <span class="nav-text">Config</span>
+        </button>
+        <button class="nav-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            <span class="nav-text">Historial</span>
+        </button>
+        <button class="nav-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="nav-text">Info</span>
+        </button>
+    </nav>
+
+    <script>
+        // ── Referencias DOM ──────────────────────────────────
+        const doorSlider = document.getElementById('doorSlider');
+        const doorTrack  = document.getElementById('doorTrack');
+        const doorFill   = document.getElementById('doorFill');
+        const doorThumb  = document.getElementById('doorThumb');
+        const doorHint   = document.getElementById('doorHint');
+        const statusEl   = document.getElementById('status');
+        const lastSentEl = document.getElementById('lastSentResult');
+        const feedbackEl = document.getElementById('feedbackResult');
+        const passInput  = document.getElementById('passInput');
+        const lockIcon   = document.getElementById('lockIcon');
+        const lockPanel  = document.getElementById('lockPanel');
+        const navStatus  = document.getElementById('navStatus');
+
+        let interval    = null;
+        let hbCount     = 1;
+
+        // Quitar el foco del campo de clave al tocar cualquier otra área de la pantalla.
+        // Sin esto, el teclado del móvil permanece abierto después de escribir la clave,
+        // tapando parte de la interfaz mientras el usuario intenta operar el slider.
+        document.querySelector('main').addEventListener('pointerdown', (e) => {
+            if (e.target !== passInput) passInput.blur();
+        });
+
+        // ── Validación de clave: habilita/bloquea el slider ──
+        passInput.addEventListener('input', () => {
+            const hasKey = passInput.value.length > 0;
+            // Alternar clase 'locked' en el slider según haya clave o no
+            doorSlider.classList.toggle('locked', !hasKey);
+            lockPanel.classList.toggle('valid', hasKey);
+            lockIcon.innerHTML = hasKey
+                ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>'
+                : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>';
+        });
+
+        // ── Comunicación HTTP ────────────────────────────────
+        async function post(path) {
+            try { return await fetch(path, { method: 'POST' }); }
+            catch(e) { return null; }
+        }
+
+        function sendKeepalive() {
+            const now     = new Date();
+            const timeStr = now.toLocaleTimeString([], {hour12: false});
+            const payload = `${hbCount}_heartbeat_${timeStr}`;
+            const userKey      = passInput.value.padEnd(16, '0').slice(0, 16);
+            const encryptedHex = ArkimodCrypto.encrypt(payload, userKey);
+            post(`/keepalive?data=${encryptedHex}`);
+            lastSentEl.innerText = `${hbCount} heartbeat ${timeStr}`;
+            hbCount++;
+        }
+
+        function start() {
+            if (interval) return;
+            hbCount = 1;
+            lastSentEl.innerText = '---';
+            feedbackEl.innerText = '---';
+            statusEl.innerText   = 'ACCIONANDO...';
+            statusEl.style.color = '#32d74b';
+            navStatus.classList.add('active');
+
+            // --- SEGURIDAD: Cifrado del comando de arranque ---
+            // A partir de ahora, no enviamos una peticion vacia a /start.
+            // Generamos una firma de inicio cifrada con AES-128 para que el
+            // ESP32 valide la autorizacion ANTES de activar su salida serie (TX).
+            // Sin esto, el hardware no generara ninguna señal fisica.
+            const now     = new Date();
+            const timeStr = now.toLocaleTimeString([], {hour12: false});
+            const payload = `action_start_${timeStr}`;
+            // Obtener la clave del input y prepararla (16 chars)
+            const userKey      = passInput.value.padEnd(16, '0').slice(0, 16);
+            const encryptedHex = ArkimodCrypto.encrypt(payload, userKey);
+
+            // Enviar peticion autenticada como parametro de URL
+            post(`/start?data=${encryptedHex}`);
+            
+            // Iniciar el bucle de heartbeats para mantener la puerta abierta
+            interval = setInterval(sendKeepalive, 500);
+        }
+
+        async function stop() {
+            if (!interval) return;
+            clearInterval(interval);
+            interval = null;
+            statusEl.innerText   = 'Detenido';
+            statusEl.style.color = '#8e8e93';
+            navStatus.classList.remove('active');
+            const res = await post('/stop');
+            if (res && res.ok) {
+                feedbackEl.innerText = await res.text() || 'Sin datos';
+            } else {
+                feedbackEl.innerText = 'Error de red';
+            }
+        }
+
+        // ── Lógica del Slider de Muelle ──────────────────────
+        // Porcentaje del recorrido total a partir del cual se activa la puerta.
+        // 0.88 = el thumb debe llegar al 88% del track para disparar el arranque.
+        const ACTIVATE_THRESHOLD = 0.88;
+
+        let isDragging   = false;  // True mientras el usuario mantiene el dedo/ratón
+        let dragStartX   = 0;     // Posición X inicial del gesto de arrastre
+        let thumbPos     = 0;     // Posición actual del thumb en píxeles
+        let sliderActive = false; // True cuando el slider está en zona de activación
+
+        // Calcula el máximo desplazamiento posible del thumb en píxeles.
+        // Se resta el ancho del thumb y los márgenes (5px cada lado).
+        function maxTravel() {
+            return doorTrack.offsetWidth - doorThumb.offsetWidth - 10;
+        }
+
+        // Mueve el thumb a la posición indicada en px, actualiza el relleno
+        // y devuelve el porcentaje de recorrido (0.0 a 1.0).
+        function moveTo(px) {
+            const max     = maxTravel();
+            const clamped = Math.max(0, Math.min(px, max));
+            thumbPos = clamped;
+            doorThumb.style.transform = `translateX(${clamped}px)`;
+            const pct = clamped / max;
+            doorFill.style.width = `${pct * 100}%`;
+            return pct;
+        }
+
+        // Anima el thumb de vuelta al origen con efecto de muelle.
+        function springBack() {
+            doorThumb.style.transition = 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1)';
+            doorFill.style.transition  = 'width 0.4s ease';
+            moveTo(0);
+            setTimeout(() => {
+                doorThumb.style.transition = '';
+                doorFill.style.transition  = '';
+            }, 400);
+        }
+
+        // Inicio del gesto: registrar posición inicial y bloquear scroll.
+        function onDown(e) {
+            if (doorSlider.classList.contains('locked')) return;
+            e.preventDefault();
+            isDragging = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            // dragStartX se calcula restando la posición actual del thumb
+            // para que el movimiento sea relativo al punto de contacto.
+            dragStartX = clientX - thumbPos;
+        }
+
+        // Movimiento continuo del gesto.
+        function onMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const pct     = moveTo(clientX - dragStartX);
+
+            // Cruzar el umbral de activación: encender el sistema
+            if (pct >= ACTIVATE_THRESHOLD && !sliderActive) {
+                sliderActive = true;
+                doorSlider.classList.add('activated');
+                doorHint.innerText = '¡Puerta en movimiento!';
+                start();
+            }
+            // Volver por debajo del umbral: apagar el sistema
+            else if (pct < ACTIVATE_THRESHOLD && sliderActive) {
+                sliderActive = false;
+                doorSlider.classList.remove('activated');
+                doorHint.innerText = 'Desliza para mover';
+                stop();
+            }
+        }
+
+        // Fin del gesto: siempre detener y volver al origen.
+        function onUp() {
+            if (!isDragging) return;
+            isDragging = false;
+            if (sliderActive) {
+                sliderActive = false;
+                doorSlider.classList.remove('activated');
+                doorHint.innerText = 'Desliza para mover';
+                stop();
+            }
+            springBack();
+        }
+
+        // Eventos de ratón (escritorio) y táctiles (móvil)
+        doorThumb.addEventListener('mousedown',  onDown, {passive: false});
+        window.addEventListener('mousemove',     onMove, {passive: false});
+        window.addEventListener('mouseup',       onUp);
+        doorThumb.addEventListener('touchstart', onDown, {passive: false});
+        window.addEventListener('touchmove',     onMove, {passive: false});
+        window.addEventListener('touchend',      onUp);
+
+        // ── Service Worker (silencioso si no existe) ─────────
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>
