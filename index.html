@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arkimod Control</title>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        :root {
+            --primary: #0a84ff;
+            --bg-main: #000000;
+            --card-bg: #1c1c1e;
+            --card-border: #2c2c2e;
+            --text-muted: #8e8e93;
+            --success: #32d74b;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-main);
+            color: #ffffff;
+            -webkit-tap-highlight-color: transparent;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            width: 100vw;
+        }
+
+        /* Área Principal Desplazable */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            overflow-y: auto;
+            padding-bottom: 80px; /* Margen para tabbar */
+        }
+
+        /* Tipografía del Header */
+        header { text-align: center; margin-top: 40px; margin-bottom: 40px; }
+        h1 { font-size: 1.5rem; font-weight: 500; letter-spacing: 0.05em; }
+        h2 { font-size: 0.7rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+
+        /* Botón de Acción */
+        .action-button {
+            width: 220px; height: 220px; border-radius: 50%; border: none; 
+            background: #d32f2f; color: white; font-weight: bold; font-size: 1.2rem; 
+            cursor: pointer; user-select: none; -webkit-user-select: none; 
+            box-shadow: 0 4px 20px rgba(211, 47, 47, 0.4);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: all 0.1s ease;
+            margin-bottom: 30px;
+        }
+        .action-button:active { 
+            background: #f44336; transform: scale(0.95); 
+            box-shadow: 0 2px 10px rgba(211, 47, 47, 0.6); 
+        }
+
+        #status {
+            color: var(--text-muted);
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            margin-bottom: 20px;
+        }
+
+        /* Panel de Latencia */
+        .feedback-panel {
+            width: 90%; max-width: 320px;
+            background-color: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 12px; padding: 16px; text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .feedback-row { display: flex; flex-direction: column; align-items: center; }
+        .divider { height: 1px; background-color: var(--card-border); width: 100%; }
+        .label { font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+        .value { font-size: 14px; font-family: monospace; font-weight: bold; }
+        .value-blue { color: var(--primary); }
+        .value-green { color: var(--success); }
+
+        /* Tab Bar Decorativo */
+        nav {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 64px;
+            background-color: black; border-top: 1px solid var(--card-border);
+            display: flex; justify-content: space-around; align-items: center;
+            z-index: 40; padding-bottom: env(safe-area-inset-bottom);
+        }
+        .nav-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; height: 100%; background: none; border: none;
+            color: rgba(255,255,255,0.4); cursor: default; user-select: none; -webkit-user-select: none;
+        }
+        .nav-btn svg { width: 24px; height: 24px; margin-bottom: 4px; }
+        .nav-text { font-size: 10px; font-weight: 500; }
+        
+        .nav-btn-active { color: var(--primary); }
+        .nav-btn-active .icon-container {
+            background-color: rgba(10, 132, 255, 0.2); border: 1px solid rgba(10, 132, 255, 0.3);
+            border-radius: 50%; padding: 8px; margin-bottom: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .nav-btn-active svg { margin-bottom: 0; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <main>
+        <header>
+            <h1>Arkimod Control ACTUALIZADA</h1>
+            <h2>Prueba de concepto</h2>
+        </header>
+        
+        <button id="btn" class="action-button">
+            <span>MANTENER</span>
+            <span>PULSADO</span>
+        </button>
+        
+        <div id="status">Esperando...</div>
+
+        <!-- Panel de validación de latencia bidireccional -->
+        <div class="feedback-panel">
+            <div class="feedback-row">
+                <span class="label">Último Enviado (Módulo Cliente)</span>
+                <span id="lastSentResult" class="value value-blue">---</span>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="feedback-row">
+                <span class="label">Último Confirmado (Módulo ESP32)</span>
+                <span id="feedbackResult" class="value value-green">---</span>
+            </div>
+        </div>
+
+        <button id="btnUpdate" style="margin-top: 40px; font-size: 11px; color: #8e8e93; background: none; border: 1px solid #2c2c2e; padding: 8px 16px; border-radius: 8px; cursor: pointer; text-transform: uppercase; font-family: monospace; letter-spacing: 0.05em;">
+            🔄 Update APP
+        </button>
+    </main>
+
+    <!-- Navigation Bar from App Reference (Estética) -->
+    <nav>
+        <button class="nav-btn">
+            <svg fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+            </svg>
+            <span class="nav-text">Inicio</span>
+        </button>
+        
+        <button class="nav-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+            </svg>
+            <span class="nav-text">Historial</span>
+        </button>
+        
+        <!-- AÑADIR (The active one) -->
+        <button class="nav-btn nav-btn-active">
+            <div class="icon-container">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
+                </svg>
+            </div>
+            <span class="nav-text" style="text-transform: uppercase;">Añadir</span>
+        </button>
+        
+        <button class="nav-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+            </svg>
+            <span class="nav-text">Datos</span>
+        </button>
+        
+        <button class="nav-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="nav-text">Info</span>
+        </button>
+    </nav>
+
+    <script>
+        const btn = document.getElementById('btn');
+        const status = document.getElementById('status');
+        const lastSentResult = document.getElementById('lastSentResult');
+        const feedbackResult = document.getElementById('feedbackResult');
+        
+        let interval = null;
+        let hbCount = 1;
+
+        async function post(path) {
+            try { return await fetch(path, { method: 'POST' }); }
+            catch(e) { return null; }
+        }
+        
+        function sendKeepalive() {
+            // Generación de timestamp local para correlación de paquetes
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], {hour12: false});
+            
+            // Empaquetado del payload usando guiones bajos como delimitadores robustos para el split en MicroPython
+            const dataStr = `${hbCount}_heartbeat_${timeStr}`;
+            post(`/keepalive?data=${dataStr}`);
+            
+            // Actualización del DOM para proveer testigo visual al operador
+            lastSentResult.innerText = `${hbCount} heartbeat ${timeStr}`;
+            
+            hbCount++;
+        }
+
+        function start() {
+            if (interval) return;
+            
+            hbCount = 1;
+            lastSentResult.innerText = "---";
+            feedbackResult.innerText = "---";
+            
+            status.innerText = "ACCIONANDO...";
+            status.style.color = "#32d74b";
+            
+            post('/start');
+            interval = setInterval(sendKeepalive, 500);
+        }
+
+        async function stop() {
+            if (!interval) return;
+            clearInterval(interval);
+            interval = null;
+            
+            status.innerText = "DETENIDO";
+            status.style.color = "#8e8e93";
+            
+            const res = await post('/stop');
+            if (res && res.ok) {
+                const textFinal = await res.text();
+                feedbackResult.innerText = textFinal || "Sin datos";
+            } else {
+                feedbackResult.innerText = "Error de red";
+            }
+        }
+
+        btn.addEventListener('mousedown', start, {passive: false});
+        btn.addEventListener('mouseup', stop);
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); start(); }, {passive: false});
+        btn.addEventListener('touchend', stop);
+
+        // Lógica del botón de Actualización OTA
+        document.getElementById('btnUpdate').addEventListener('click', async () => {
+            const confirmed = window.confirm("ATENCIÓN:\n\nLa placa se va a reiniciar para descargar la última versión de la App desde el servidor central.\n\nPerderás conexión a la red ARKIMOD_CONTROL durante aproximadamente 10 segundos.\n\n¿Deseas continuar con la actualización?");
+            if (confirmed) {
+                document.getElementById('btnUpdate').innerText = "ACTUALIZANDO...";
+                document.getElementById('btnUpdate').style.color = "#0a84ff";
+                await post('/update_ui');
+            }
+        });
+
+        // Registro del Service Worker para funcionamiento PWA y Caché Offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW falló:', err));
+            });
+        }
+    </script>
+</body>
+</html>
